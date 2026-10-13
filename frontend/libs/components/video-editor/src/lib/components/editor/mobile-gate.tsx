@@ -18,7 +18,12 @@ export function MobileGate({ children }: MobileGateProps) {
 
   useEffect(() => {
     const isMobile = window.innerWidth < 1024;
-    const acknowledged = localStorage.getItem(STORAGE_KEY) === "true";
+    let acknowledged = false;
+    try {
+      acknowledged = window.localStorage.getItem(STORAGE_KEY) === "true";
+    } catch {
+      // Storage can be disabled in private or sandboxed browser contexts.
+    }
     setShow(isMobile && !acknowledged);
   }, []);
 
@@ -26,7 +31,11 @@ export function MobileGate({ children }: MobileGateProps) {
   if (!show) return <>{children}</>;
 
   const handleContinue = () => {
-    localStorage.setItem(STORAGE_KEY, "true");
+    try {
+      window.localStorage.setItem(STORAGE_KEY, "true");
+    } catch {
+      // The acknowledgement is best-effort; don't block access to the editor.
+    }
     setShow(false);
   };
 
