@@ -1,0 +1,28 @@
+name: Audit PR 2478 - moodboard paste placement
+
+on:
+  push:
+    branches:
+      - audit/pr-2478
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  moodboard-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked workspace dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Run complete moodboard test suite
+        working-directory: frontend
+        run: npx vitest run --config libs/components/moodboard/vite.config.ts
