@@ -1,0 +1,64 @@
+name: Audit PR 2495 - Linux build preflight
+
+on:
+  push:
+    branches:
+      - audit/pr-2495
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax-check every touched shell script
+        run: |
+          bash -n script/common/linux_preflight.sh
+          bash -n script/artcraft/unix_dev.sh
+          bash -n script/artcraft/unix_rust_dev.sh
+          bash -n script/artcraft/unix_build.sh
+      - name: Run the existing dev-launcher regression tests
+        run: node --test frontend/scripts/unix-dev.test.mjs
+      - name: Exercise system preflight success, missing dependency, and opt-out paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          script="$PWD/script/common/linux_preflight.sh"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          cat > "$tmp/pkg-config-ok" <<'STUB'
+          #!/usr/bin/env bash
+          [[ "${1:-}" == "--exists" && -n "${2:-}" ]]
+          STUB
+          chmod +x "$tmp/pkg-config-ok"
+          PKG_CONFIG="$tmp/pkg-config-ok" bash -c 'source "$1"; linux_preflight' _ "$script"
+
+          cat > "$tmp/pkg-config-missing-webkit" <<'STUB'
+          #!/usr/bin/env bash
+          [[ "${1:-}" == "--exists" ]] || exit 2
+          [[ "${2:-}" != "webkit2gtk-4.1" ]]
+          STUB
+          chmod +x "$tmp/pkg-config-missing-webkit"
+          if PKG_CONFIG="$tmp/pkg-config-missing-webkit" bash -c 'source "$1"; linux_preflight' _ "$script" >"$tmp/out" 2>&1; then
+            echo "Expected missing WebKitGTK development files to fail preflight" >&2
+            exit 1
+          fi
+          grep -q 'webkit2gtk-4.1' "$tmp/out"
+          grep -q 'development packages' "$tmp/out"
+
+          if PKG_CONFIG="$tmp/not-installed" bash -c 'source "$1"; linux_preflight' _ "$script" >"$tmp/out" 2>&1; then
+            echo "Expected a missing pkg-config executable to fail preflight" >&2
+            exit 1
+          fi
+          grep -q 'pkg-config is not installed' "$tmp/out"
+
+          ARTCRAFT_SKIP_SYSTEM_PREFLIGHT=1 PKG_CONFIG="$tmp/not-installed" bash -c 'source "$1"; linux_preflight' _ "$script"
+          echo "Linux preflight smoke cases passed"
