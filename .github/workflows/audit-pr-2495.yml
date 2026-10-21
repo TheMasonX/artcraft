@@ -24,6 +24,9 @@ jobs:
           bash -n script/artcraft/unix_dev.sh
           bash -n script/artcraft/unix_rust_dev.sh
           bash -n script/artcraft/unix_build.sh
+      - name: Install locked frontend workspace dependencies
+        working-directory: frontend
+        run: npm ci
       - name: Run the existing dev-launcher regression tests
         run: node --test frontend/scripts/unix-dev.test.mjs
       - name: Exercise system preflight success, missing dependency, and opt-out paths
