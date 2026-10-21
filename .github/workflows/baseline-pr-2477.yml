@@ -1,0 +1,43 @@
+name: Baseline regression check for PR 2477
+
+on:
+  push:
+    branches:
+      - audit/base-pr-2477
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked workspace dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Confirm new regression cases fail on unmodified base
+        working-directory: frontend
+        shell: bash
+        run: |
+          set +e
+          npx vitest run --config libs/components/moodboard/vite.config.ts libs/components/moodboard/src/lib/persistence/moodboardSync.spec.ts > /tmp/pr-2477-baseline.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/pr-2477-baseline.log
+          if [[ "$status" -eq 0 ]]; then
+            echo "Regression tests unexpectedly pass on the unmodified base." >&2
+            exit 1
+          fi
+          if ! grep -q "AssertionError" /tmp/pr-2477-baseline.log; then
+            echo "Test run failed without an assertion failure; baseline is inconclusive." >&2
+            exit 1
+          fi
+          echo "Confirmed: the regression spec fails by assertion against the unmodified base."
