@@ -65,3 +65,25 @@ jobs:
 
           ARTCRAFT_SKIP_SYSTEM_PREFLIGHT=1 PKG_CONFIG="$tmp/not-installed" bash -c 'source "$1"; linux_preflight' _ "$script"
           echo "Linux preflight smoke cases passed"
+
+      - name: Check whether missing AppIndicator is detected
+        shell: bash
+        run: |
+          set -euo pipefail
+          script="$PWD/script/common/linux_preflight.sh"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          cat > "$tmp/pkg-config-no-appindicator" <<'STUB'
+          #!/usr/bin/env bash
+          [[ "${1:-}" == "--exists" ]] || exit 2
+          case "${2:-}" in
+            appindicator3-0.1|ayatana-appindicator3-0.1) exit 1 ;;
+            *) exit 0 ;;
+          esac
+          STUB
+          chmod +x "$tmp/pkg-config-no-appindicator"
+          if PKG_CONFIG="$tmp/pkg-config-no-appindicator" bash -c 'source "$1"; linux_preflight' _ "$script"; then
+            echo "GAP CONFIRMED: preflight succeeds when both AppIndicator pkg-config modules are unavailable."
+          else
+            echo "AppIndicator absence is detected by the preflight."
+          fi
